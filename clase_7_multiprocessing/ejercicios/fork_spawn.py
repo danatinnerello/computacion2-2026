@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Comparación fork vs spawn."""
-
 from multiprocessing import Process, set_start_method
 import multiprocessing
 import time

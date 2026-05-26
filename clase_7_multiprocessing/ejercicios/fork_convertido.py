@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-"""Ejemplo usando multiprocessing.Process."""
 from multiprocessing import Process
 import os
 
