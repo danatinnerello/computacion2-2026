@@ -18,6 +18,7 @@
 - `clase_6_mmap/` - Ejercicios resueltos
 - `clase_7_multiprocessings/` - Ejercicios resueltos
 - `clase_8_avanzado/` - Ejercicios resueltos
+- `clase_7_threading/` - Ejercicios resueltos
 - `tp1/` - Trabajo Práctico 1
 - `tp2/` - Trabajo Práctico 2
 
@@ -34,6 +35,7 @@
 | Clase 6    | Listo  |
 | Clase 7    | Listo  |
 | Clase 8    | Listo  |
+| Clase 9    | Listo  |
 | TP1        | Pendiente |
 | TP2        | Pendiente |
 
