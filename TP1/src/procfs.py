@@ -1,5 +1,6 @@
 # src/procfs.py
 
+import os
 from pathlib import Path
 
 
@@ -106,3 +107,20 @@ def leer_cmdline(pid):
         contenido = archivo.read()
 
     return contenido.replace(b"\0", b" ").decode(errors="ignore").strip()
+
+def contar_fds(pid):
+    """
+    Cuenta los file descriptors abiertos por un proceso.
+    """
+
+    ruta = f"/proc/{pid}/fd"
+
+    try:
+        return len(os.listdir(ruta))
+
+    except (
+        FileNotFoundError,
+        PermissionError,
+        ProcessLookupError
+    ):
+        return 0

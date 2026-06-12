@@ -8,9 +8,9 @@ from procfs import (
     leer_meminfo,
     leer_stat,
     leer_status,
-    leer_cmdline
+    leer_cmdline,
+    contar_fds
 )
-
 
 def recolectar():
 
@@ -25,10 +25,11 @@ def recolectar():
 
         try:
             snapshot["procesos"][pid] = {
-                "stat": leer_stat(pid),
-                "status": leer_status(pid),
-                "cmdline": leer_cmdline(pid)
-            }
+            "stat": leer_stat(pid),
+            "status": leer_status(pid),
+            "cmdline": leer_cmdline(pid),
+            "fds": contar_fds(pid)
+        }
 
         except (
             FileNotFoundError,
