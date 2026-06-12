@@ -36,6 +36,8 @@
 | Clase 7    | Listo  |
 | Clase 8    | Listo  |
 | Clase 9    | Listo  |
+| Clase 10   | Listo  |
+| Clase 11   | Pendiente |
 | TP1        | Pendiente |
 | TP2        | Pendiente |
 
