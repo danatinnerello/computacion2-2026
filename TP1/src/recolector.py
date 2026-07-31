@@ -1,5 +1,3 @@
-# src/recolector.py
-
 from time import time
 
 from procfs import (
@@ -9,33 +7,38 @@ from procfs import (
     leer_stat,
     leer_status,
     leer_cmdline,
-    contar_fds
+    leer_fds,
+    leer_loadavg,
+    leer_uptime,
+    obtener_usuario,
 )
 
-def recolectar():
 
+def recolectar():
     snapshot = {
         "timestamp": time(),
         "cpu": leer_cpu_global(),
         "memoria": leer_meminfo(),
-        "procesos": {}
+        "loadavg": leer_loadavg(),
     }
 
+    uptime, boot_time = leer_uptime()
+    snapshot["uptime"] = uptime
+    snapshot["boot_time"] = boot_time
+    snapshot["procesos"] = {}
+
     for pid in obtener_pids():
-
         try:
+            status = leer_status(pid)
+            uid = status.get("Uid", "0").split()[0]
             snapshot["procesos"][pid] = {
-            "stat": leer_stat(pid),
-            "status": leer_status(pid),
-            "cmdline": leer_cmdline(pid),
-            "fds": contar_fds(pid)
-        }
-
-        except (
-            FileNotFoundError,
-            PermissionError,
-            ProcessLookupError
-        ):
+                "stat": leer_stat(pid),
+                "status": status,
+                "cmdline": leer_cmdline(pid),
+                "fds": leer_fds(pid),
+                "usuario": obtener_usuario(uid),
+            }
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
             pass
 
     return snapshot
