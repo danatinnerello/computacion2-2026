@@ -124,26 +124,33 @@ def parse_kb(value):
 
 
 def filtrar_y_ordenar(data, estado, snapshot=None):
-    filtro = estado.get("filtro", "").lower()
-    filtro_usuario = estado.get("filtro_usuario", "").lower()
+    filtro = estado.get("filtro", "").strip().lower()
+    filtro_usuario = estado.get("filtro_usuario", "").strip().lower()
     resultados = []
 
     procesos_snapshot = None
     if snapshot is not None:
-        snapshot_data = snapshot.get("snapshot") if isinstance(snapshot, dict) else None
+        # snapshot puede ser un dict comun o el DictProxy que devuelve
+        # multiprocessing.Manager().dict() (usado en shared.py). Ese proxy
+        # no es instancia de dict aunque soporte .get(), asi que no podemos
+        # usar isinstance(snapshot, dict) para decidir si tiene el metodo.
+        try:
+            snapshot_data = snapshot.get("snapshot")
+        except (AttributeError, TypeError):
+            snapshot_data = None
         if isinstance(snapshot_data, dict):
             procesos_snapshot = snapshot_data.get("procesos")
             if not isinstance(procesos_snapshot, dict):
                 procesos_snapshot = None
 
     for item in data:
-        comando = str(item.get("comando", "")).lower()
-        usuario = str(item.get("usuario", "")).lower()
+        comando = str(item.get("comando", "")).strip().lower()
+        usuario = str(item.get("usuario", "")).strip().lower()
         if not usuario and procesos_snapshot is not None:
             pid = item.get("pid")
             proc_data = procesos_snapshot.get(pid)
             if isinstance(proc_data, dict):
-                usuario = str(proc_data.get("usuario", "")).lower()
+                usuario = str(proc_data.get("usuario", "")).strip().lower()
 
         if filtro and filtro not in comando:
             continue
@@ -159,7 +166,6 @@ def filtrar_y_ordenar(data, estado, snapshot=None):
         resultados.sort(key=lambda p: int(p.get("pid", 0)))
 
     return resultados
-
 
 def format_row(item, vista):
     if vista == "resumen":
@@ -178,11 +184,15 @@ def format_row(item, vista):
         return f"{item['pid']:<7}{item['priority']:<7}{item['nice']:<7}{item['pgid']:<7}{item['sid']:<7}{item['cpus']:<8}{item['comando'][:20]}"
     return str(item)
 
-
 def pedir_texto(stdscr, prompt, valor_actual):
     if curses is None or stdscr is None:
         return valor_actual
     curses.echo()
+    # El loop principal deja stdscr en modo no bloqueante (nodelay/timeout)
+    # para poder refrescar la pantalla sola. Si no lo desactivamos acá,
+    # getstr() hereda ese timeout y devuelve vacio antes de que puedas
+    # escribir nada. Lo volvemos a activar al salir para no romper el loop.
+    stdscr.nodelay(False)
     try:
         stdscr.erase()
         safe_addstr(stdscr, 0, 0, prompt)
@@ -190,8 +200,8 @@ def pedir_texto(stdscr, prompt, valor_actual):
         texto = stdscr.getstr(0, len(prompt)).decode("utf-8", errors="ignore")
     finally:
         curses.noecho()
-    return texto if texto else valor_actual
-
+        stdscr.nodelay(True)
+    return texto
 
 def render_texto_simple(estado):
     vista = estado["vista"]
@@ -371,7 +381,7 @@ def dibujar_pantalla(stdscr, estado):
                 render_detalle_proceso(stdscr, estado, selected_item, y_info + 3, max_y)
 
     safe_addstr(stdscr, max_y - 3, 0, "-" * (max_x - 1))
-    safe_addstr(stdscr, max_y - 2, 0, "Teclas: 1-7/r/m/f/t/s/p/g  ↑/↓ navegar  Enter pin  / filtrar  u usuario  c ordenar  +/- intervalo  h=help")
+    safe_addstr(stdscr, max_y - 2, 0, "Teclas: 1-7/r/m/f/t/s/p/g  ↑/↓ navegar  Enter pin  / filtrar  u usuario  c ordenar x limpiar filtro +/- intervalo  h=help")
     stdscr.refresh()
 
 
@@ -438,6 +448,13 @@ def procesar_tecla(ch, estado, intervalos, stdscr):
         estado["needs_refresh"] = True
         return
 
+    if key == "x":
+        estado["filtro"] = ""
+        estado["filtro_usuario"] = ""
+        estado["mensaje"] = "Filtros limpiados"
+        estado["needs_refresh"] = True
+        return
+
     if key == "/":
         texto = pedir_texto(stdscr, "Filtro comando: ", estado.get("filtro", ""))
         estado["filtro"] = texto
@@ -453,7 +470,7 @@ def procesar_tecla(ch, estado, intervalos, stdscr):
         return
 
     if key == "h" or key == "?":
-        estado["mensaje"] = "Ayuda: 1-7/r/m/... q, +/-, / filtra por comando, u por usuario, c ordena"
+        estado["mensaje"] = "Ayuda: 1-7/r/m/... q, +/-, / filtra por comando, u por usuario, x limpiar filtro, c ordena"
         estado["needs_refresh"] = True
         return
 
