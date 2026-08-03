@@ -1,2 +1,1 @@
-curses
-rich
+#No requiere instalación de librerías adicionales

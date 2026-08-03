@@ -75,22 +75,10 @@ def render_detalle_proceso(stdscr, estado, selected_item, y, max_y):
         for i, t in enumerate(threads[:limite]):
             linea = (
                 f"  tid={t.get('tid'):<8}{t.get('nombre', ''):<16}"
-                f"estado={t.get('estado'):<3}cpu_jiffies={t.get('cpu')}"
+                f"estado={t.get('estado'):<3}cpu%={t.get('cpu_pct', 0.0):<6}"
+                f"vol={t.get('voluntary', 0):<5}nvol={t.get('nonvoluntary', 0):<5}"
             )
             safe_addstr(stdscr, y + 1 + i, 0, linea)
-
-    elif vista == "senales":
-        safe_addstr(stdscr, y, 0, "Máscaras completas de señales:")
-        campos = [
-            ("SigBlk (bloqueadas)", "SigBlk"),
-            ("SigIgn (ignoradas)", "SigIgn"),
-            ("SigCgt (con handler)", "SigCgt"),
-            ("SigPnd (pendientes proc.)", "SigPnd"),
-            ("ShdPnd (pendientes grupo)", "ShdPnd"),
-        ]
-        for i, (etiqueta, clave) in enumerate(campos[:espacio_disponible - 1]):
-            valor = ", ".join(selected_item.get(clave, [])) or "-"
-            safe_addstr(stdscr, y + 1 + i, 0, f"  {etiqueta}: {valor}")
 
     elif vista == "memoria":
         segmentos = selected_item.get("segmentos", {})
@@ -181,7 +169,7 @@ def format_row(item, vista):
         sigcgt = ", ".join(item["SigCgt"])[:20]
         return f"{item['pid']:<7}{sigign:<22}{sigcgt:<22}{item['comando'][:25]}"
     if vista == "scheduling":
-        return f"{item['pid']:<7}{item['priority']:<7}{item['nice']:<7}{item['pgid']:<7}{item['sid']:<7}{item['cpus']:<8}{item['comando'][:20]}"
+        return f"{item['pid']:<7}{item['priority']:<7}{item['nice']:<7}{item['rt_priority']:<7}{item['pgid']:<7}{item['sid']:<7}{item['cpus']:<8}{item['comando'][:18]}"
     return str(item)
 
 def pedir_texto(stdscr, prompt, valor_actual):
@@ -216,12 +204,20 @@ def render_texto_simple(estado):
         if isinstance(data, dict):
             lines.extend([
                 f"Procesos: {data.get('procesos', 0)}",
+                f"Threads totales: {data.get('threads_total', 0)}",
                 f"Memoria total: {data.get('mem_total', 0)} kB",
                 f"Memoria libre : {data.get('mem_libre', 0)} kB",
                 f"Uso memoria  : {data.get('mem_pct', 0)} %",
                 f"Load avg     : {data.get('loadavg', '-')}",
-                f"Zombies      : {data.get('zombies', 0)}",
+                f"CPU user/system/idle/iowait: {data.get('cpu_user', 0.0)}/{data.get('cpu_system', 0.0)}/{data.get('cpu_idle', 0.0)}/{data.get('cpu_iowait', 0.0)} %",
+                "Top CPU:",
             ])
+            for proc in data.get("top_cpu", [])[:3]:
+                lines.append(f"  {proc['pid']:<7}{proc['cpu_pct']:<7}{proc['comando'][:40]}")
+            lines.append("Top Memoria (RSS):")
+            for proc in data.get("top_mem", [])[:3]:
+                lines.append(f"  {proc['pid']:<7}{proc['rss_kb']:<9}{proc['comando'][:40]}")
+            lines.append(f"Zombies      : {data.get('zombies', 0)}")
     else:
         rows = filtrar_y_ordenar(data, estado, estado.get("snapshot"))
         lines.append("Listado de procesos:")
@@ -246,7 +242,7 @@ def render_texto_simple(estado):
                 for t in threads[:limite]:
                     lines.append(
                         f"  tid={t.get('tid')} {t.get('nombre')} "
-                        f"estado={t.get('estado')} cpu_jiffies={t.get('cpu')}"
+                        f"estado={t.get('estado')} cpu%={t.get('cpu_pct', 0.0)}"
                     )
             elif vista == "senales":
                 lines.append(f"  SigBlk: {', '.join(selected_item.get('SigBlk', [])) or '-'}")
@@ -272,7 +268,7 @@ def render_texto_simple(estado):
 def run_fallback_loop(estado, snapshot, intervalos, senales_module):
     while not estado["salir"] and not senales_module.shutdown:
         estado["snapshot"] = snapshot
-        estado["intervalo"] = int(intervalos.get(estado["vista"], estado["intervalo"]))
+        estado["intervalo"] = intervalos.get(estado["vista"], estado["intervalo"])
 
         if senales_module.reload_requested:
             nueva = cargar_config()
@@ -301,14 +297,22 @@ def run_fallback_loop(estado, snapshot, intervalos, senales_module):
 
         try:
             import select
-            if select.select([sys.stdin], [], [], 0.0)[0]:
+            fds_a_esperar = [sys.stdin]
+            if senales_module._signal_pipe_r is not None:
+                fds_a_esperar.append(senales_module._signal_pipe_r)
+            listos, _, _ = select.select(fds_a_esperar, [], [], 0.1)
+            if sys.stdin in listos:
                 ch = sys.stdin.read(1)
                 if ch:
                     procesar_tecla(ch, estado, intervalos, None)
+            if senales_module._signal_pipe_r in listos:
+                # Drena el self-pipe: esto es lo que evita que set_wakeup_fd
+                # llene el buffer y además es lo que realmente "consume" el
+                # patrón self-pipe (antes las flags se leían directo, sin
+                # pasar por acá).
+                senales_module.consume_signal_events()
         except Exception:
-            pass
-
-        time.sleep(0.1)
+            time.sleep(0.1)
 
 
 def dibujar_pantalla(stdscr, estado):
@@ -340,9 +344,12 @@ def dibujar_pantalla(stdscr, estado):
             safe_addstr(stdscr, 11, 0, f"CPU idle     : {data.get('cpu_idle', 0.0)} %")
             safe_addstr(stdscr, 12, 0, f"CPU iowait   : {data.get('cpu_iowait', 0.0)} %")
             safe_addstr(stdscr, 14, 0, "Top procesos por CPU:")
-            for idx, proc in enumerate(data.get("top_cpu", [])[:5]):
+            for idx, proc in enumerate(data.get("top_cpu", [])[:3]):
                 safe_addstr(stdscr, 15 + idx, 0, f"{proc['pid']:<7}{proc['cpu_pct']:<7}{proc['comando'][:40]}")
-            safe_addstr(stdscr, 21, 0, f"Zombies      : {data.get('zombies', 0)}")
+            safe_addstr(stdscr, 19, 0, "Top procesos por Memoria (RSS):")
+            for idx, proc in enumerate(data.get("top_mem", [])[:3]):
+                safe_addstr(stdscr, 20 + idx, 0, f"{proc['pid']:<7}{proc['rss_kb']:<9}{proc['comando'][:40]}")
+            safe_addstr(stdscr, 24, 0, f"Zombies      : {data.get('zombies', 0)}")
     else:
         headers = {
             "resumen": "PID     USUARIO   PPID   EST   HILOS  CPU%   COMANDO",
@@ -350,7 +357,7 @@ def dibujar_pantalla(stdscr, estado):
             "fds": "PID     FDS     COMANDO",
             "threads": "PID     TIDS    CPU%    COMANDO",
             "senales": "PID     SIGIGN                SIGCGT                COMANDO",
-            "scheduling": "PID     PRI     NICE    PGID    SID     CPUS     COMANDO",
+            "scheduling": "PID     PRI     NICE    RTPRI   PGID    SID     CPUS     COMANDO",
         }
         safe_addstr(stdscr, 4, 0, headers.get(estado["vista"], "Listado de procesos:"))
         rows = filtrar_y_ordenar(data, estado, estado.get("snapshot"))
@@ -425,18 +432,23 @@ def procesar_tecla(ch, estado, intervalos, stdscr):
         return
 
     if key == "+":
-        nuevo = max(1, int(intervalos.get(estado["vista"], 2)) - 1)
-        intervalos[estado["vista"]] = nuevo
-        estado["intervalo"] = nuevo
-        estado["mensaje"] = f"Intervalo {estado['vista']} = {nuevo}s"
+        # "+" = refresco más rápido -> intervalo más chico (respetando el
+        # mínimo de la vista activa, que varía según lo pedido en la consigna).
+        vista = estado["vista"]
+        nuevo = round(intervalos.get(vista, 2) - 0.5, 2)
+        intervalos[vista] = nuevo  # IntervalStore clampea al mínimo solo
+        estado["intervalo"] = intervalos.get(vista)
+        minimo = intervalos.minimo(vista) if hasattr(intervalos, "minimo") else 0.5
+        estado["mensaje"] = f"Intervalo {vista} = {estado['intervalo']}s (mínimo {minimo}s)"
         estado["needs_refresh"] = True
         return
 
     if key == "-":
-        nuevo = int(intervalos.get(estado["vista"], 2)) + 1
-        intervalos[estado["vista"]] = nuevo
-        estado["intervalo"] = nuevo
-        estado["mensaje"] = f"Intervalo {estado['vista']} = {nuevo}s"
+        vista = estado["vista"]
+        nuevo = round(intervalos.get(vista, 2) + 0.5, 2)
+        intervalos[vista] = nuevo
+        estado["intervalo"] = intervalos.get(vista)
+        estado["mensaje"] = f"Intervalo {vista} = {estado['intervalo']}s"
         estado["needs_refresh"] = True
         return
 
@@ -481,7 +493,7 @@ def run_display(snapshot, intervalos):
         "filtro": "",
         "filtro_usuario": "",
         "orden": "pid",
-        "intervalo": int(intervalos.get("sistema", 2)),
+        "intervalo": intervalos.get("sistema", 2),
         "salir": False,
         "snapshot": snapshot,
         "mensaje": "",
@@ -502,7 +514,7 @@ def run_display(snapshot, intervalos):
 
         while not estado["salir"] and not senales.shutdown:
             estado["snapshot"] = snapshot
-            estado["intervalo"] = int(intervalos.get(estado["vista"], estado["intervalo"]))
+            estado["intervalo"] = intervalos.get(estado["vista"], estado["intervalo"])
 
             if senales.reload_requested:
                 nueva = cargar_config()
@@ -537,6 +549,12 @@ def run_display(snapshot, intervalos):
             ch = stdscr.getch()
             if ch != -1:
                 procesar_tecla(ch, estado, intervalos, stdscr)
+
+            if senales._signal_pipe_r is not None:
+                import select
+                listos, _, _ = select.select([senales._signal_pipe_r], [], [], 0.0)
+                if listos:
+                    senales.consume_signal_events()
 
             time.sleep(0.1)
 

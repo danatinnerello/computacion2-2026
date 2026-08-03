@@ -1,7 +1,7 @@
-import copy
 from time import sleep, time
 
 from procfs import leer_threads
+from shared import recibir_ultimo
 
 
 def analizar(snapshot, anterior):
@@ -36,7 +36,7 @@ def analizar(snapshot, anterior):
     return procesos
 
 
-def proceso_resumen(snapshot_compartido, intervalos):
+def proceso_resumen(cola_entrada, cola_resultados, intervalos):
     import signal
 
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -44,10 +44,11 @@ def proceso_resumen(snapshot_compartido, intervalos):
     anterior = None
 
     while True:
-        if "snapshot" in snapshot_compartido:
-            actual = copy.deepcopy(snapshot_compartido["snapshot"])
+        intervalo = intervalos.get("resumen", 2)
+        actual = recibir_ultimo(cola_entrada, timeout=intervalo)
+        if actual is not None:
             resultado = analizar(actual, anterior)
-            snapshot_compartido["resumen"] = {"datos": resultado, "ts": time()}
+            cola_resultados.put(("resumen", resultado, time()))
             anterior = actual
 
-        sleep(intervalos.get("resumen", 2))
+        sleep(intervalo)

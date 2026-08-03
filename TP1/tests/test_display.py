@@ -74,10 +74,12 @@ class TestDisplayExtra(unittest.TestCase):
 
     @patch("display.curses", None)
     def test_procesar_tecla_plus_minus(self):
+        from shared import IntervalStore
+
         estado = {"vista": "resumen", "orden": "pid", "intervalo": 2, "mensaje": "", "needs_refresh": False}
-        intervalos = {"resumen": 2}
+        intervalos = IntervalStore({"resumen": 2})
         display.procesar_tecla("+", estado, intervalos, None)
-        self.assertEqual(estado["intervalo"], 1)
+        self.assertEqual(estado["intervalo"], 1.5)
         display.procesar_tecla("-", estado, intervalos, None)
         self.assertEqual(estado["intervalo"], 2)
 

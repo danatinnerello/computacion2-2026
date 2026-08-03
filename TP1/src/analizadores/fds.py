@@ -1,5 +1,7 @@
 from time import sleep, time
 
+from shared import recibir_ultimo
+
 
 def analizar(snapshot):
     procesos = []
@@ -15,14 +17,16 @@ def analizar(snapshot):
     return procesos
 
 
-def proceso_fds(snapshot_compartido, intervalos):
+def proceso_fds(cola_entrada, cola_resultados, intervalos):
     import signal
 
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     while True:
-        if "snapshot" in snapshot_compartido:
-            resultado = analizar(snapshot_compartido["snapshot"])
-            snapshot_compartido["fds"] = {"datos": resultado, "ts": time()}
+        intervalo = intervalos.get("fds", 5)
+        actual = recibir_ultimo(cola_entrada, timeout=intervalo)
+        if actual is not None:
+            resultado = analizar(actual)
+            cola_resultados.put(("fds", resultado, time()))
 
-        sleep(intervalos.get("fds", 5))
+        sleep(intervalo)

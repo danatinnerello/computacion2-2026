@@ -1,4 +1,5 @@
-from time import time
+from time import sleep, time
+import queue as _queue_mod
 
 from procfs import (
     obtener_pids,
@@ -12,6 +13,7 @@ from procfs import (
     leer_uptime,
     obtener_usuario,
 )
+from analizadores.cpu import calcular_cpu
 
 
 def recolectar():
@@ -42,3 +44,36 @@ def recolectar():
             pass
 
     return snapshot
+
+
+def recolector_loop(colas_analizadores):
+    """Proceso recolector: lee /proc y REPARTE el snapshot crudo a los 7
+    analizadores por sus propias Queue (no escribe en el Manager.dict; ese
+    es trabajo exclusivo del agregador). Usamos una cola por analizador
+    porque una Queue normal solo entrega cada item a UN consumidor, y acá
+    los 7 necesitan la misma foto del sistema."""
+    import signal
+
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    anterior_snapshot = None
+
+    while True:
+        nuevo_snapshot = recolectar()
+
+        if anterior_snapshot is not None:
+            nuevo_snapshot["cpu_pct"] = calcular_cpu(anterior_snapshot, nuevo_snapshot)
+        else:
+            nuevo_snapshot["cpu_pct"] = {}
+
+        for cola in colas_analizadores.values():
+            try:
+                cola.put_nowait(nuevo_snapshot)
+            except _queue_mod.Full:
+                # El analizador todavía no consumió el anterior; no importa,
+                # se queda con lo que ya tiene en la cola (se descarta el
+                # nuevo antes que bloquear al recolector).
+                pass
+
+        anterior_snapshot = nuevo_snapshot
+        sleep(1)

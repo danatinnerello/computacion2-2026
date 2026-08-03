@@ -1,5 +1,7 @@
 from time import sleep, time
 
+from shared import recibir_ultimo
+
 
 def policy_name(policy):
     if policy == 0:
@@ -38,14 +40,16 @@ def analizar(snapshot):
     return procesos
 
 
-def proceso_scheduling(snapshot_compartido, intervalos):
+def proceso_scheduling(cola_entrada, cola_resultados, intervalos):
     import signal
 
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     while True:
-        if "snapshot" in snapshot_compartido:
-            resultado = analizar(snapshot_compartido["snapshot"])
-            snapshot_compartido["scheduling"] = {"datos": resultado, "ts": time()}
+        intervalo = intervalos.get("scheduling", 10)
+        actual = recibir_ultimo(cola_entrada, timeout=intervalo)
+        if actual is not None:
+            resultado = analizar(actual)
+            cola_resultados.put(("scheduling", resultado, time()))
 
-        sleep(intervalos.get("scheduling", 10))
+        sleep(intervalo)

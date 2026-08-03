@@ -165,13 +165,24 @@ def leer_threads(pid):
                 with open(f"{ruta}/{tid}/stat", "r", encoding="utf-8") as archivo:
                     campos = archivo.read().split()
                 status = leer_thread_status(pid, tid)
+                voluntary = 0
+                nonvoluntary = 0
+                try:
+                    voluntary = int(status.get("voluntary_ctxt_switches", "0") or 0)
+                except ValueError:
+                    voluntary = 0
+                try:
+                    nonvoluntary = int(status.get("nonvoluntary_ctxt_switches", "0") or 0)
+                except ValueError:
+                    nonvoluntary = 0
+
                 resultado.append({
                     "tid": int(tid),
                     "nombre": campos[1].strip("()"),
                     "estado": campos[2],
                     "cpu": int(campos[13]) + int(campos[14]),
-                    "voluntary": status.get("voluntary_ctxt_switches", "0"),
-                    "nonvoluntary": status.get("nonvoluntary_ctxt_switches", "0"),
+                    "voluntary": voluntary,
+                    "nonvoluntary": nonvoluntary,
                 })
             except (FileNotFoundError, PermissionError, IndexError):
                 pass

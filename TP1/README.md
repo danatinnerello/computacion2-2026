@@ -102,6 +102,78 @@ El proceso principal maneja eventos de señales para:
 - `SIGWINCH`: detectar cambio de tamaño de terminal
 - `SIGINT` / `SIGTERM`: terminar la aplicación
 
+## Diagrama de arquitectura
+
+Proceso y comunicación (diagrama ASCII):
+
+```
+                     +----------------+
+                     |    usuario     |
+                     +--------+-------+
+                              |
+                              v
+                    +----------------------+        signals
+                    |      `src/main.py`   |<--------------------+
+                    +---------+------------+                     |
+                              | spawn processes                       |
+      +-----------------------+-----------------------+           |
+      |                       |                       |           |
+      v                       v                       v           |
+ +-----------+    +----------------------+   +----------------+    |
+ | recolector|--->| shared `Manager().dict`|<--| display (curses)|   |
+ | src/recolector.py | (snapshot, intervalos)|   | src/display.py |   |
+ +-----------+    +----------------------+   +----------------+    |
+      |                       ^                       ^           |
+      |                       |                       |           |
+      |                       |                       |           |
+      v                       |                       |           |
+ +-----------+  +-----------+ |  +-------------+  +---+----+       |
+ |analizador |  |analizador | |  |analizador   |  |analizador|      |
+ | sistema   |  | resumen   | |  | memoria     |  | fds      |      |
+ | src/...   |  | src/...   | |  | src/...     |  | src/...  |      |
+ +-----------+  +-----------+ |  +-------------+  +---------+      |
+                              |                                      |
+                              +--------------------------------------+ 
+```
+
+Comunicación: los procesos comparten estado a través de `multiprocessing.Manager()` (proxy dict). Las señales (SIGHUP, SIGUSR1, SIGUSR2, SIGWINCH, SIGINT) se gestionan en `src/senales.py` para coordinar recarga, dump, verbose y resize.
+
+## Decisiones de diseño (argumentadas)
+
+- Mecanismo de IPC elegido
+  - Se usa `multiprocessing.Manager().dict()` como estructura compartida principal (`snapshot`) entre recolector, analizadores y display. Esto permite mantener un snapshot global complejo con diccionarios y listas sin tener que serializar manualmente objetos en cada pasaje.
+  - La comunicación entre recolector y analizadores usa `Queue`, y entre analizadores y agregador también usa `Queue`. De esta forma cada analizador recibe el snapshot crudo por su propia cola, y el agregador recibe solo su resultado.
+
+- ¿Por qué `Manager` y no `Value` / `Array` para el snapshot?
+  - `Value` y `Array` son útiles para datos simples y homogéneos. El snapshot global tiene estructuras heterogéneas: diccionarios anidados, listas de procesos, strings y números. Un `Manager.dict()` puede exponer esos datos directamente como proxies compartidos.
+  - Para los intervalos se usa `multiprocessing.Value('d', ...)` en `src/shared.py`, porque son 7 valores numéricos simples y cambiar su valor es frecuente. Eso reduce el overhead frente a usar un proxy `Manager.dict()` aquí.
+
+- Manejo de condiciones de carrera
+  - El recolector construye el snapshot completo localmente y luego lo publica en el `Manager.dict()` de un solo golpe. Cada analizador consume la versión más reciente a través de `Queue`, y el agregador es el único proceso que escribe en el snapshot final.
+  - No se muta el snapshot compartido en sitio; los analizadores leen datos del snapshot enviado por el recolector y generan resultados locales que luego el agregador vuelca en la estructura global. Esto evita inconsistencias causadas por accesos concurrentes a la misma clave.
+  - Las señales se manejan con `signal.set_wakeup_fd` hacia un self-pipe, de modo que el loop principal no depende de operaciones no seguras en el handler.
+
+- Elección de intervalos por defecto
+  - Los intervalos en `config.json` son moderados (2-10s) para balancear frescura de la información y coste de I/O de `/proc`. `sistema` es rápido, por eso usa 2s; `fds` y `senales` son más costosos y usan 5-10s.
+  - El usuario puede ajustar el intervalo de la vista activa con `+` / `-`, y los cambios se aplican al `Value` compartido de esa vista.
+
+## Conceptos del curso aplicados (mapeo a contenidos de clases)
+
+- Detección de zombies (clase 3/4: procesos, fork/exec/wait)
+  - Implementación: en `src/analizadores/sistema.py` se usa `stat['state']` (campo `state` devuelto por `procfs.leer_stat`) y se cuenta cuántos tienen estado `'Z'` (zombie). Esto aplica el concepto visto en clase sobre procesos terminados cuyo padre no llamó a `wait()`.
+
+- Lectura de `/proc` y parsing de estructuras (clase 2/3: sistemas de archivos y procfs)
+  - Implementación: `src/procfs.py` contiene funciones `leer_stat`, `leer_status`, `leer_cmdline`, `leer_meminfo`, `leer_loadavg`, `leer_uptime` que parsean directamente las entradas de `/proc`. Relacionado con prácticas de la carpeta `clase_2_Docker_aplicado` y `clase_3_procesos` donde se trabajó con información de procesos y entorno.
+
+- Comunicación entre procesos y pipes/signals (clase 4/5: pipes y señales)
+  - Implementación: `src/senales.py` crea un pipe para notificar el loop principal y registra handlers POSIX para `SIGUSR1`, `SIGUSR2`, `SIGHUP`, `SIGWINCH`, `SIGINT`/`SIGTERM`. Esto refleja lo visto en `clase_4_pipes` y `clase_5_señales` sobre el uso de pipes no bloqueantes y handlers para coordinar eventos.
+
+- Multiprocesamiento y uso de `Manager` (clase 7: multiprocessing)
+  - Implementación: `src/shared.py` instancia `Manager()` y expone `snapshot` e `intervalos` como proxies compartidos; `src/main.py` arranca procesos (`Process`) para recolector y analizadores. Esta decisión es análoga a los ejemplos de `clase_7_multiprocessing` donde se enseñó a compartir estado entre procesos.
+
+- Tratamiento de E/S y redirección (clase 4 y 6)
+  - Implementación: las funciones de `procfs.leer_fds` y lectura de maps hacen uso de enlaces simbólicos y lectura de ficheros para inferir tipo de destino (socket, pipe, tty). Esto conecta con las prácticas de `clase_4_pipes` y `clase_6_mmap` donde se manipuló I/O y mapeos de memoria.
+
 ## Configuración
 
 El archivo `config.json` define el intervalo de actualización para cada vista:
@@ -143,11 +215,10 @@ python3 src/main.py
 ## Ejecución en Docker
 
 ```bash
-cd TP1
 docker compose run --rm monitor
 ```
 
-El contenedor monta el directorio actual en `/app` y arranca `python3 src/main.py`.
+El contenedor monta el directorio actual en `/app`.
 
 ## Pruebas unitarias
 
@@ -179,9 +250,18 @@ python3 -m unittest tests.test_display
 - El proyecto está pensado para Linux, ya que usa `/proc` y señales POSIX.
 - En entornos sin `curses`, el proyecto tiene una ruta de fallback que imprime texto simple.
 - La configuración de intervalos puede recargarse en caliente con `SIGHUP`.
+- El monitor usa `multiprocessing` y `signal.set_wakeup_fd` para evitar bloquear el loop principal en la espera de señales.
+
+## Limitaciones conocidas
+
+- La vista de memoria no muestra todos los campos de `/proc/<pid>/status` (por ejemplo `VmData`, `VmLib`, `VmExe` se parsean pero pueden no presentarse todos en pantalla según ancho de terminal).
+- El cálculo de CPU% por thread usa el delta de jiffies relativo al delta global, lo cual puede ser menos preciso en procesos muy cortos o con picos rápidos.
+- La interfaz `curses` puede no renderizar bien en terminals muy pequeños; la experiencia funciona mejor con al menos 80 columnas.
+- Si un analizador muere, el monitor principal no reinicia automáticamente ese proceso; el shutdown sigue funcionando.
 
 ## Buenas prácticas
 
 - Ejecuta siempre desde el directorio `TP1` para que las rutas relativas funcionen.
 - Usa un terminal real para la interfaz `curses`, no un entorno no interactivo.
 - Si agregas nuevas vistas, incluye tests en `tests/test_analizadores.py` y la lógica de render en `src/display.py`.
+

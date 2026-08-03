@@ -27,14 +27,24 @@ class TestSistemaAnalyzer(unittest.TestCase):
     def test_analizar_con_top_cpu(self):
         snapshot = {
             "cpu": {"user": 100, "system": 50, "idle": 200, "iowait": 10},
-            "memoria": {"MemTotal": 1000, "MemFree": 400},
+            "memoria": {
+                "MemTotal": 1000,
+                "MemFree": 400,
+                "MemAvailable": 500,
+                "Buffers": 50,
+                "Cached": 100,
+                "SwapTotal": 200,
+                "SwapFree": 180,
+            },
             "loadavg": {"one": "0.10"},
             "uptime": 100,
+            "boot_time": 1600000000,
             "procesos": {
                 1: {
-                    "stat": {"state": "R"},
-                    "cmdline": "python",
-                    "usuaario": "danat",
+                    "stat": {"state": "R", "comm": "python"},
+                    "status": {"VmRSS": "25 kB"},
+                    "cmdline": "python script.py",
+                    "usuario": "danat",
                 }
             },
             "cpu_pct": {1: 42.0},
@@ -43,18 +53,21 @@ class TestSistemaAnalyzer(unittest.TestCase):
         self.assertEqual(datos["mem_pct"], 60.0)
         self.assertEqual(datos["top_cpu"][0]["pid"], 1)
         self.assertEqual(datos["top_cpu"][0]["cpu_pct"], 42.0)
+        self.assertEqual(datos["mem_available"], 500)
+        self.assertEqual(datos["uptime"], 100)
+        self.assertEqual(datos["top_mem"][0]["rss_kb"], 25)
 
 
 class TestThreadsAnalyzer(unittest.TestCase):
-    @patch("analizadores.threads.leer_threads", return_value=[{"cpu": 5}, {"cpu": 2}])
+    @patch("analizadores.threads.leer_threads", return_value=[{"tid": 1, "cpu": 5}, {"tid": 2, "cpu": 2}])
     def test_analizar_ordenes_por_cantidad(self, mock_leer_threads):
         snapshot = {
             "procesos": {
-                1: {"stat": {"comm": "bash"}, "cmdline": "", "cmdline": "bash"}
+                1: {"stat": {"comm": "bash"}, "cmdline": "bash"}
             },
             "cpu_pct": {1: 1.0},
         }
-        procesos = threads.analizar(snapshot)
+        procesos, _ = threads.analizar(snapshot, {})
         self.assertEqual(procesos[0]["cantidad"], 2)
 
 

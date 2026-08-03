@@ -22,7 +22,13 @@ def reset_state():
 def _write_signal_event(sig_name):
     global _signal_pipe_w
     if _signal_pipe_w is not None:
-        os.write(_signal_pipe_w, (sig_name + "\n").encode("utf-8"))
+        try:
+            os.write(_signal_pipe_w, (sig_name + "\n").encode("utf-8"))
+        except BlockingIOError:
+            # El pipe está lleno porque nadie lo drenó a tiempo; no es
+            # async-signal-safe levantar una excepción acá, así que la
+            # ignoramos. Las flags globales ya quedaron seteadas.
+            pass
 
 
 def handler_sigint(signum, frame):
@@ -52,7 +58,7 @@ def handler_sigusr2(signum, frame):
 def handler_sighup(signum, frame):
     global reload_requested
     reload_requested = True
-    _write_signal_event("SIGSIGHUP")
+    _write_signal_event("SIGHUP")
 
 
 def handler_sigwinch(signum, frame):
