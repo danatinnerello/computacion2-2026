@@ -27,10 +27,15 @@ def analizar(snapshot, anterior):
     datos["mem_total"] = snapshot["memoria"].get("MemTotal", 0)
     datos["mem_libre"] = snapshot["memoria"].get("MemFree", 0)
     datos["mem_available"] = snapshot["memoria"].get("MemAvailable", 0)
+    datos["mem_buffers"] = snapshot["memoria"].get("Buffers", 0)
+    datos["mem_cached"] = snapshot["memoria"].get("Cached", 0)
+    datos["swap_total"] = snapshot["memoria"].get("SwapTotal", 0)
+    datos["swap_libre"] = snapshot["memoria"].get("SwapFree", 0)
     datos["mem_pct"] = round(
         (datos["mem_total"] - datos["mem_libre"]) * 100 / datos["mem_total"],
         2
     ) if datos["mem_total"] else 0.0
+    datos["boot_time"] = snapshot.get("boot_time", 0)
 
     estados = Counter()
     zombies = 0

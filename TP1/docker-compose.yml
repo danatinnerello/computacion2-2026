@@ -10,3 +10,4 @@ services:
       - PYTHONUNBUFFERED=1
     init: true
     command: ["python3", "src/main.py"]
+    pid: "host"

@@ -66,11 +66,25 @@ def leer_uptime():
     return uptime, boot_time
 
 
+def _parse_proc_stat(contenido):
+    """Parsea el contenido de /proc/<pid>/stat respetando el campo comm entre paréntesis."""
+    inicio = contenido.find("(")
+    fin = contenido.rfind(")")
+    if inicio == -1 or fin == -1 or fin <= inicio:
+        campos = contenido.split()
+        return campos
+
+    prefijo = contenido[:inicio].strip().split()
+    comm = contenido[inicio + 1:fin]
+    sufijo = contenido[fin + 2:].split()
+    return prefijo + [f"({comm})"] + sufijo
+
+
 def leer_stat(pid):
     ruta = f"/proc/{pid}/stat"
     with open(ruta, "r", encoding="utf-8") as archivo:
         contenido = archivo.read()
-    campos = contenido.split()
+    campos = _parse_proc_stat(contenido)
 
     return {
         "pid": int(campos[0]),
@@ -90,8 +104,9 @@ def leer_stat(pid):
         "num_threads": int(campos[19]),
         "vsize": int(campos[22]),
         "rss": int(campos[23]),
-        "policy": int(campos[41]) if len(campos) > 41 else -1,
         "processor": int(campos[38]) if len(campos) > 38 else -1,
+        "rt_priority": int(campos[39]) if len(campos) > 39 else 0,
+        "policy": int(campos[40]) if len(campos) > 40 else -1,
     }
 
 

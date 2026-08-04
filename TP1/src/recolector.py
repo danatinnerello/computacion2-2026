@@ -70,10 +70,16 @@ def recolector_loop(colas_analizadores):
             try:
                 cola.put_nowait(nuevo_snapshot)
             except _queue_mod.Full:
-                # El analizador todavía no consumió el anterior; no importa,
-                # se queda con lo que ya tiene en la cola (se descarta el
-                # nuevo antes que bloquear al recolector).
-                pass
+                # El analizador todavía no consumió el anterior; descartamos
+                # la muestra más antigua para conservar siempre la más reciente.
+                try:
+                    cola.get_nowait()
+                except _queue_mod.Empty:
+                    pass
+                try:
+                    cola.put_nowait(nuevo_snapshot)
+                except _queue_mod.Full:
+                    pass
 
         anterior_snapshot = nuevo_snapshot
         sleep(1)

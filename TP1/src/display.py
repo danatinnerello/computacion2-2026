@@ -89,11 +89,39 @@ def render_detalle_proceso(stdscr, estado, selected_item, y, max_y):
             if tipo in segmentos and i < espacio_disponible - 1:
                 safe_addstr(stdscr, y + 1 + i, 0, f"  {tipo:<8}: {segmentos[tipo]} KB")
                 i += 1
-        if verbose and i < espacio_disponible - 1:
-            safe_addstr(
-                stdscr, y + 1 + i, 0,
-                f"  minflt={selected_item.get('minflt', 0)}  majflt={selected_item.get('majflt', 0)}"
-            )
+        if i < espacio_disponible - 1:
+            safe_addstr(stdscr, y + 1 + i, 0, f"  VmSize={selected_item.get('VmSize', '0 kB')} VmRSS={selected_item.get('VmRSS', '0 kB')}")
+            i += 1
+        if i < espacio_disponible - 1:
+            safe_addstr(stdscr, y + 1 + i, 0, f"  VmSwap={selected_item.get('VmSwap', '0 kB')} VmHWM={selected_item.get('VmHWM', '0 kB')}")
+            i += 1
+        if i < espacio_disponible - 1:
+            safe_addstr(stdscr, y + 1 + i, 0, f"  VmData={selected_item.get('VmData', '0 kB')} VmStk={selected_item.get('VmStk', '0 kB')}")
+            i += 1
+        if i < espacio_disponible - 1:
+            safe_addstr(stdscr, y + 1 + i, 0, f"  VmExe={selected_item.get('VmExe', '0 kB')} VmLib={selected_item.get('VmLib', '0 kB')}")
+            i += 1
+        if i < espacio_disponible - 1:
+            safe_addstr(stdscr, y + 1 + i, 0, f"  minflt={selected_item.get('minflt', 0)} majflt={selected_item.get('majflt', 0)}")
+            i += 1
+        if i < espacio_disponible - 1:
+            safe_addstr(stdscr, y + 1 + i, 0, f"  cminflt={selected_item.get('cminflt', 0)} cmajflt={selected_item.get('cmajflt', 0)}")
+
+    elif vista == "senales":
+        safe_addstr(stdscr, y, 0, "Detalle señales:")
+        safe_addstr(stdscr, y + 1, 0, f"  SigBlk = {', '.join(selected_item.get('SigBlk', [])) or '-'}")
+        safe_addstr(stdscr, y + 2, 0, f"  SigPnd = {', '.join(selected_item.get('SigPnd', [])) or '-'}")
+        safe_addstr(stdscr, y + 3, 0, f"  SigIgn = {', '.join(selected_item.get('SigIgn', [])) or '-'}")
+        safe_addstr(stdscr, y + 4, 0, f"  SigCgt = {', '.join(selected_item.get('SigCgt', [])) or '-'}")
+        safe_addstr(stdscr, y + 5, 0, f"  ShdPnd = {', '.join(selected_item.get('ShdPnd', [])) or '-'}")
+
+    elif vista == "scheduling":
+        safe_addstr(stdscr, y, 0, "Detalle scheduling:")
+        safe_addstr(stdscr, y + 1, 0, f"  policy = {selected_item.get('policy', '-')}")
+        safe_addstr(stdscr, y + 2, 0, f"  rt_priority = {selected_item.get('rt_priority', 0)}")
+        safe_addstr(stdscr, y + 3, 0, f"  voluntary = {selected_item.get('voluntary', '0')}")
+        safe_addstr(stdscr, y + 4, 0, f"  nonvoluntary = {selected_item.get('nonvoluntary', '0')}")
+        safe_addstr(stdscr, y + 5, 0, f"  utime = {selected_item.get('utime', 0)} stime = {selected_item.get('stime', 0)}")
 
 
 def safe_addstr(window, y, x, text):
@@ -155,11 +183,28 @@ def filtrar_y_ordenar(data, estado, snapshot=None):
 
     return resultados
 
+
+def seleccionar_rango_visible(rows, selected_index, max_lista):
+    if max_lista <= 0:
+        return [], 0
+    window_start = 0
+    if selected_index >= max_lista:
+        window_start = selected_index - max_lista + 1
+    return rows[window_start:window_start + max_lista], window_start
+
+
 def format_row(item, vista):
     if vista == "resumen":
-        return f"{item['pid']:<7}{item['usuario']:<10}{item['ppid']:<7}{item['estado']:<5}{item['threads']:<6}{item['cpu_pct']:<7}{item['comando'][:33]}"
+        return (
+            f"{item['pid']:<7}{item.get('uid', '-'):<5}{item.get('gid', '-'):<5}"
+            f"{item['usuario']:<10}{item['ppid']:<7}{item['estado']:<5}"
+            f"{item['threads']:<6}{item.get('rss_kb', 0):<8}{item['cpu_pct']:<7}{item['comando'][:28]}"
+        )
     if vista == "memoria":
-        return f"{item['pid']:<7}{item['VmRSS']:<10}{item['VmSize']:<10}{item['VmSwap']:<10}{item['comando'][:40]}"
+        return (
+            f"{item['pid']:<7}{item['VmRSS']:<10}{item['VmSize']:<10}"
+            f"{item['VmSwap']:<10}{item['comando'][:36]}"
+        )
     if vista == "fds":
         return f"{item['pid']:<7}{item['cantidad_fds']:<6}{item['comando'][:50]}"
     if vista == "threads":
@@ -169,7 +214,11 @@ def format_row(item, vista):
         sigcgt = ", ".join(item["SigCgt"])[:20]
         return f"{item['pid']:<7}{sigign:<22}{sigcgt:<22}{item['comando'][:25]}"
     if vista == "scheduling":
-        return f"{item['pid']:<7}{item['priority']:<7}{item['nice']:<7}{item['rt_priority']:<7}{item['pgid']:<7}{item['sid']:<7}{item['cpus']:<8}{item['comando'][:18]}"
+        return (
+            f"{item.get('pid', '-'):<7}{item.get('priority', '-'):<7}{item.get('nice', '-'):<7}"
+            f"{item.get('rt_priority', '-'):<7}{item.get('policy', '-'):<7}{item.get('pgid', '-'):<7}"
+            f"{item.get('sid', '-'):<7}{item.get('cpus', '-'):<8}{item.get('comando', '')[:16]}"
+        )
     return str(item)
 
 def pedir_texto(stdscr, prompt, valor_actual):
@@ -196,8 +245,8 @@ def render_texto_simple(estado):
     data = estado["snapshot"].get(vista, {}).get("datos", [])
     tag_verbose = "  [VERBOSE]" if estado.get("verbose") else ""
     lines = [
-        f"TP1 Monitor - Vista: {vista}  intervalo: {estado['intervalo']}s{tag_verbose}",
-        f"filtro: {estado['filtro'] or '-'}  usuario: {estado['filtro_usuario'] or '-'}",
+        f"TP1 Monitor - Vista: {vista}  intervalo: {estado.get('intervalo', '?')}s{tag_verbose}",
+        f"filtro: {estado.get('filtro', '') or '-'}  usuario: {estado.get('filtro_usuario', '') or '-'}",
     ]
 
     if vista == "sistema":
@@ -207,11 +256,20 @@ def render_texto_simple(estado):
                 f"Threads totales: {data.get('threads_total', 0)}",
                 f"Memoria total: {data.get('mem_total', 0)} kB",
                 f"Memoria libre : {data.get('mem_libre', 0)} kB",
+                f"Buffers      : {data.get('mem_buffers', 0)} kB",
+                f"Cached       : {data.get('mem_cached', 0)} kB",
+                f"Swap total   : {data.get('swap_total', 0)} kB",
+                f"Swap libre   : {data.get('swap_libre', 0)} kB",
                 f"Uso memoria  : {data.get('mem_pct', 0)} %",
+                f"Boot time    : {data.get('boot_time', 0)}",
+                f"Uptime       : {data.get('uptime', 0)} s",
                 f"Load avg     : {data.get('loadavg', '-')}",
                 f"CPU user/system/idle/iowait: {data.get('cpu_user', 0.0)}/{data.get('cpu_system', 0.0)}/{data.get('cpu_idle', 0.0)}/{data.get('cpu_iowait', 0.0)} %",
-                "Top CPU:",
+                "Procesos por estado:",
             ])
+            for estado_key, cantidad in data.get('por_estado', {}).items():
+                lines.append(f"  {estado_key}: {cantidad}")
+            lines.append("Top CPU:")
             for proc in data.get("top_cpu", [])[:3]:
                 lines.append(f"  {proc['pid']:<7}{proc['cpu_pct']:<7}{proc['comando'][:40]}")
             lines.append("Top Memoria (RSS):")
@@ -224,7 +282,7 @@ def render_texto_simple(estado):
         for item in rows[:8]:
             lines.append(format_row(item, vista))
 
-        if rows and vista in ("fds", "threads", "senales", "memoria"):
+        if rows and vista in ("fds", "threads", "senales", "memoria", "scheduling"):
             selected_index = max(0, min(estado.get("selected_index", 0), len(rows) - 1))
             selected_item = rows[selected_index]
             verbose = estado.get("verbose", False)
@@ -255,10 +313,22 @@ def render_texto_simple(estado):
                 for tipo in ["text", "data", "heap", "stack", "shared", "kernel", "otro"]:
                     if tipo in segmentos:
                         lines.append(f"  {tipo}: {segmentos[tipo]} KB")
-                if verbose:
-                    lines.append(
-                        f"  minflt={selected_item.get('minflt', 0)}  majflt={selected_item.get('majflt', 0)}"
-                    )
+                lines.append(f"  VmSize = {selected_item.get('VmSize', '0 kB')}")
+                lines.append(f"  VmRSS = {selected_item.get('VmRSS', '0 kB')}")
+                lines.append(f"  VmSwap = {selected_item.get('VmSwap', '0 kB')}")
+                lines.append(f"  VmHWM = {selected_item.get('VmHWM', '0 kB')}")
+                lines.append(f"  VmData = {selected_item.get('VmData', '0 kB')}")
+                lines.append(f"  VmStk  = {selected_item.get('VmStk', '0 kB')}")
+                lines.append(f"  VmExe  = {selected_item.get('VmExe', '0 kB')}")
+                lines.append(f"  VmLib  = {selected_item.get('VmLib', '0 kB')}")
+                lines.append(f"  minflt = {selected_item.get('minflt', 0)} majflt = {selected_item.get('majflt', 0)}")
+                lines.append(f"  cminflt = {selected_item.get('cminflt', 0)} cmajflt = {selected_item.get('cmajflt', 0)}")
+            elif vista == "scheduling":
+                lines.append(f"  policy={selected_item.get('policy', '-')}")
+                lines.append(f"  rt_priority={selected_item.get('rt_priority', 0)}")
+                lines.append(f"  voluntary={selected_item.get('voluntary', '0')}")
+                lines.append(f"  nonvoluntary={selected_item.get('nonvoluntary', '0')}")
+                lines.append(f"  utime={selected_item.get('utime', 0)} stime={selected_item.get('stime', 0)}")
 
     sys.stdout.write("\033[2J\033[H")
     sys.stdout.write("\n".join(lines) + "\n")
@@ -334,30 +404,66 @@ def dibujar_pantalla(stdscr, estado):
     data = estado["snapshot"].get(estado["vista"], {}).get("datos", [])
     if estado["vista"] == "sistema":
         if isinstance(data, dict):
-            safe_addstr(stdscr, 4, 0, f"Procesos: {data.get('procesos', 0)}")
-            safe_addstr(stdscr, 5, 0, f"Memoria total: {data.get('mem_total', 0)} kB")
-            safe_addstr(stdscr, 6, 0, f"Memoria libre : {data.get('mem_libre', 0)} kB")
-            safe_addstr(stdscr, 7, 0, f"Uso memoria  : {data.get('mem_pct', 0)} %")
-            safe_addstr(stdscr, 8, 0, f"Load avg     : {data.get('loadavg', '-')}")
-            safe_addstr(stdscr, 9, 0, f"CPU user     : {data.get('cpu_user', 0.0)} %")
-            safe_addstr(stdscr, 10, 0, f"CPU system   : {data.get('cpu_system', 0.0)} %")
-            safe_addstr(stdscr, 11, 0, f"CPU idle     : {data.get('cpu_idle', 0.0)} %")
-            safe_addstr(stdscr, 12, 0, f"CPU iowait   : {data.get('cpu_iowait', 0.0)} %")
-            safe_addstr(stdscr, 14, 0, "Top procesos por CPU:")
-            for idx, proc in enumerate(data.get("top_cpu", [])[:3]):
-                safe_addstr(stdscr, 15 + idx, 0, f"{proc['pid']:<7}{proc['cpu_pct']:<7}{proc['comando'][:40]}")
-            safe_addstr(stdscr, 19, 0, "Top procesos por Memoria (RSS):")
-            for idx, proc in enumerate(data.get("top_mem", [])[:3]):
-                safe_addstr(stdscr, 20 + idx, 0, f"{proc['pid']:<7}{proc['rss_kb']:<9}{proc['comando'][:40]}")
-            safe_addstr(stdscr, 24, 0, f"Zombies      : {data.get('zombies', 0)}")
+            ypos = 4
+            safe_addstr(stdscr, ypos, 0, f"Procesos: {data.get('procesos', 0)}")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Threads totales: {data.get('threads_total', 0)}")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Memoria total: {data.get('mem_total', 0)} kB")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Memoria libre : {data.get('mem_libre', 0)} kB")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Buffers      : {data.get('mem_buffers', 0)} kB")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Cached       : {data.get('mem_cached', 0)} kB")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Swap total   : {data.get('swap_total', 0)} kB")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Swap libre   : {data.get('swap_libre', 0)} kB")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Uso memoria  : {data.get('mem_pct', 0)} %")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Boot time    : {data.get('boot_time', 0)}")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Uptime       : {data.get('uptime', 0)} s")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Load avg     : {data.get('loadavg', '-')}")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"CPU user     : {data.get('cpu_user', 0.0)} %")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"CPU system   : {data.get('cpu_system', 0.0)} %")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"CPU idle     : {data.get('cpu_idle', 0.0)} %")
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"CPU iowait   : {data.get('cpu_iowait', 0.0)} %")
+            ypos += 2
+            safe_addstr(stdscr, ypos, 0, "Procesos por estado:")
+            ypos += 1
+            for estado_key, cantidad in data.get('por_estado', {}).items():
+                safe_addstr(stdscr, ypos, 0, f"{estado_key}: {cantidad}")
+                ypos += 1
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, "Top procesos por CPU:")
+            ypos += 1
+            for proc in data.get("top_cpu", [])[:3]:
+                safe_addstr(stdscr, ypos, 0, f"{proc['pid']:<7}{proc['cpu_pct']:<7}{proc['comando'][:40]}")
+                ypos += 1
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, "Top procesos por Memoria (RSS):")
+            ypos += 1
+            for proc in data.get("top_mem", [])[:3]:
+                safe_addstr(stdscr, ypos, 0, f"{proc['pid']:<7}{proc['rss_kb']:<9}{proc['comando'][:40]}")
+                ypos += 1
+            ypos += 1
+            safe_addstr(stdscr, ypos, 0, f"Zombies      : {data.get('zombies', 0)}")
     else:
         headers = {
-            "resumen": "PID     USUARIO   PPID   EST   HILOS  CPU%   COMANDO",
+            "resumen": "PID     UID  GID  USUARIO   PPID   EST   HILOS  RSSKB   CPU%   COMANDO",
             "memoria": "PID     RSS       VSIZE     SWAP      COMANDO",
             "fds": "PID     FDS     COMANDO",
             "threads": "PID     TIDS    CPU%    COMANDO",
             "senales": "PID     SIGIGN                SIGCGT                COMANDO",
-            "scheduling": "PID     PRI     NICE    RTPRI   PGID    SID     CPUS     COMANDO",
+            "scheduling": "PID     PRI     NICE    RTPRI   POL   PGID    SID     CPUS     COMANDO",
         }
         safe_addstr(stdscr, 4, 0, headers.get(estado["vista"], "Listado de procesos:"))
         rows = filtrar_y_ordenar(data, estado, estado.get("snapshot"))
@@ -365,15 +471,24 @@ def dibujar_pantalla(stdscr, estado):
             safe_addstr(stdscr, 6, 0, "No hay procesos que coincidan con el filtro.")
         else:
             # Reservamos espacio fijo abajo para el panel de detalle (fds/threads/
-            # senales/memoria) y el footer, y el resto se lo damos a la lista.
+            # senales/memoria/scheduling) y el footer, y el resto se lo damos a la lista.
             filas_reservadas_pie = 10
             max_lista = max(3, min(18, max_y - 6 - filas_reservadas_pie))
 
-            selected_index = max(0, min(estado.get("selected_index", 0), len(rows) - 1))
+            pinned_pid = estado.get("pinned_pid")
+            selected_index = estado.get("selected_index", 0)
+            if pinned_pid is not None:
+                for idx, item in enumerate(rows):
+                    if item.get("pid") == pinned_pid:
+                        selected_index = idx
+                        break
+            selected_index = max(0, min(selected_index, len(rows) - 1))
             estado["selected_index"] = selected_index
-            for index, item in enumerate(rows[:max_lista]):
+
+            visible_rows, window_start = seleccionar_rango_visible(rows, selected_index, max_lista)
+            for index, item in enumerate(visible_rows):
                 line = format_row(item, estado["vista"])
-                if index == selected_index:
+                if window_start + index == selected_index:
                     line = f"> {line}"
                 safe_addstr(stdscr, 6 + index, 0, line)
 
@@ -384,7 +499,7 @@ def dibujar_pantalla(stdscr, estado):
             safe_addstr(stdscr, y_info, 0, f"PID={selected_item.get('pid')} CMD={str(selected_item.get('comando', ''))[:80]}")
             safe_addstr(stdscr, y_info + 1, 0, f"Usuario={selected_item.get('usuario', '-')} Orden={estado.get('orden', 'pid')}")
 
-            if estado["vista"] in ("fds", "threads", "senales", "memoria"):
+            if estado["vista"] in ("fds", "threads", "senales", "memoria", "scheduling"):
                 render_detalle_proceso(stdscr, estado, selected_item, y_info + 3, max_y)
 
     safe_addstr(stdscr, max_y - 3, 0, "-" * (max_x - 1))
@@ -417,7 +532,7 @@ def procesar_tecla(ch, estado, intervalos, stdscr):
         return
 
     if curses is not None and ch == curses.KEY_DOWN:
-        estado["selected_index"] = min(17, estado.get("selected_index", 0) + 1)
+        estado["selected_index"] = estado.get("selected_index", 0) + 1
         estado["mensaje"] = "Selección abajo"
         estado["needs_refresh"] = True
         return
@@ -426,8 +541,16 @@ def procesar_tecla(ch, estado, intervalos, stdscr):
         selected_pid = estado.get("selected_pid")
         if selected_pid is None:
             selected_pid = estado.get("pinned_pid")
-        estado["pinned_pid"] = selected_pid
-        estado["mensaje"] = f"Pin activado para PID {selected_pid}" if selected_pid is not None else "No hay proceso seleccionado"
+
+        if selected_pid is None:
+            estado["mensaje"] = "No hay proceso seleccionado"
+        elif estado.get("pinned_pid") == selected_pid:
+            estado["pinned_pid"] = None
+            estado["mensaje"] = f"Se quitó el pin de PID {selected_pid}"
+        else:
+            estado["pinned_pid"] = selected_pid
+            estado["mensaje"] = f"Pin activado para PID {selected_pid}"
+
         estado["needs_refresh"] = True
         return
 

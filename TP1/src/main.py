@@ -45,7 +45,9 @@ if __name__ == "__main__":
     # Una Queue por analizador: el recolector le manda a cada uno su propia
     # copia del snapshot crudo (no puede ser UNA sola Queue compartida entre
     # los 7, porque un item de una Queue solo lo puede consumir un proceso).
-    colas_analizadores = {vista: Queue(maxsize=3) for vista in VISTAS}
+    # maxsize=1 mantiene siempre la muestra más reciente, porque descartamos
+    # la anterior si el analizador no la consumió todavía.
+    colas_analizadores = {vista: Queue(maxsize=1) for vista in VISTAS}
 
     # Una sola Queue de resultados: los 7 analizadores publican ahí y el
     # agregador es el único consumidor -> único escritor del snapshot global.
@@ -112,11 +114,11 @@ if __name__ == "__main__":
         p.start()
 
     try:
-        run_display(snapshot, intervalos)
+        run_display(snapshot, intervalos) # Muestra la interfaz
     finally:
         for p in processes:
             terminate_process(p)
 
-        shutdown_manager()
+        shutdown_manager() # libera la memoria compartida del Manager
         print("\nMonitor finalizado.")
         exit(0)

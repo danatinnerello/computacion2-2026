@@ -1,3 +1,4 @@
+import io
 import sys
 from pathlib import Path
 import unittest
@@ -88,6 +89,172 @@ class TestDisplayExtra(unittest.TestCase):
         estado = {"mensaje": "", "needs_refresh": False}
         display.procesar_tecla("h", estado, {}, None)
         self.assertIn("Ayuda", estado["mensaje"])
+
+    def test_texto_simple_scheduling_detalle(self):
+        estado = {
+            "vista": "scheduling",
+            "snapshot": {
+                "scheduling": {
+                    "datos": [
+                        {
+                            "pid": 1,
+                            "policy": "RR",
+                            "rt_priority": 5,
+                            "voluntary": "1",
+                            "nonvoluntary": "0",
+                            "utime": 10,
+                            "stime": 20,
+                            "comando": "bash",
+                        }
+                    ]
+                }
+            },
+            "filtro": "",
+            "filtro_usuario": "",
+            "orden": "pid",
+            "selected_index": 0,
+            "verbose": False,
+            "intervalo": 1,
+        }
+        buffer = io.StringIO()
+        original_stdout = sys.stdout
+        try:
+            sys.stdout = buffer
+            display.render_texto_simple(estado)
+        finally:
+            sys.stdout = original_stdout
+        salida = buffer.getvalue()
+        self.assertIn("Detalle PID=1", salida)
+        self.assertIn("policy=RR", salida)
+        self.assertIn("rt_priority=5", salida)
+
+    def test_texto_simple_memoria_detalle(self):
+        estado = {
+            "vista": "memoria",
+            "snapshot": {
+                "memoria": {
+                    "datos": [
+                        {
+                            "pid": 2,
+                            "VmSize": "100 kB",
+                            "VmRSS": "50 kB",
+                            "VmSwap": "10 kB",
+                            "VmHWM": "60 kB",
+                            "VmData": "20 kB",
+                            "VmStk": "8 kB",
+                            "VmExe": "5 kB",
+                            "VmLib": "15 kB",
+                            "minflt": 12,
+                            "majflt": 1,
+                            "cminflt": 2,
+                            "cmajflt": 3,
+                            "segmentos": {},
+                            "comando": "python",
+                        }
+                    ]
+                }
+            },
+            "filtro": "",
+            "filtro_usuario": "",
+            "orden": "pid",
+            "selected_index": 0,
+            "verbose": False,
+            "intervalo": 1,
+        }
+        buffer = io.StringIO()
+        original_stdout = sys.stdout
+        try:
+            sys.stdout = buffer
+            display.render_texto_simple(estado)
+        finally:
+            sys.stdout = original_stdout
+        salida = buffer.getvalue()
+        self.assertIn("VmSize = 100 kB", salida)
+        self.assertIn("VmData = 20 kB", salida)
+        self.assertIn("cminflt = 2", salida)
+
+    def test_texto_simple_senales_detalle(self):
+        estado = {
+            "vista": "senales",
+            "snapshot": {
+                "senales": {
+                    "datos": [
+                        {
+                            "pid": 3,
+                            "SigPnd": ["SIGUSR1"],
+                            "SigBlk": ["SIGINT"],
+                            "SigIgn": ["SIGPIPE"],
+                            "SigCgt": ["SIGTERM"],
+                            "ShdPnd": ["SIGCHLD"],
+                            "comando": "sh",
+                        }
+                    ]
+                }
+            },
+            "filtro": "",
+            "filtro_usuario": "",
+            "orden": "pid",
+            "selected_index": 0,
+            "verbose": False,
+            "intervalo": 1,
+        }
+        buffer = io.StringIO()
+        original_stdout = sys.stdout
+        try:
+            sys.stdout = buffer
+            display.render_texto_simple(estado)
+        finally:
+            sys.stdout = original_stdout
+        salida = buffer.getvalue()
+        self.assertIn("SigBlk: SIGINT", salida)
+        self.assertIn("SigPnd: SIGUSR1", salida)
+        self.assertIn("ShdPnd: SIGCHLD", salida)
+
+    def test_texto_simple_sistema_uptime(self):
+        estado = {
+            "vista": "sistema",
+            "snapshot": {
+                "sistema": {
+                    "datos": {
+                        "procesos": 1,
+                        "threads_total": 1,
+                        "mem_total": 1024,
+                        "mem_libre": 512,
+                        "mem_buffers": 128,
+                        "mem_cached": 256,
+                        "swap_total": 2048,
+                        "swap_libre": 1024,
+                        "mem_pct": 50.0,
+                        "boot_time": 1000,
+                        "uptime": 2000,
+                        "loadavg": [0.1, 0.2, 0.3],
+                        "cpu_user": 10.0,
+                        "cpu_system": 5.0,
+                        "cpu_idle": 80.0,
+                        "cpu_iowait": 5.0,
+                        "por_estado": {},
+                        "top_cpu": [],
+                        "top_mem": [],
+                        "zombies": 0,
+                    }
+                }
+            },
+            "filtro": "",
+            "filtro_usuario": "",
+            "orden": "pid",
+            "selected_index": 0,
+            "verbose": False,
+            "intervalo": 1,
+        }
+        buffer = io.StringIO()
+        original_stdout = sys.stdout
+        try:
+            sys.stdout = buffer
+            display.render_texto_simple(estado)
+        finally:
+            sys.stdout = original_stdout
+        salida = buffer.getvalue()
+        self.assertIn("Uptime       : 2000 s", salida)
 
     def test_procesar_tecla_quit(self):
         estado = {"salir": True}

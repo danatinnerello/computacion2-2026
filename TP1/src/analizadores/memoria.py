@@ -29,6 +29,8 @@ def analizar(snapshot):
             "VmSwap": status.get("VmSwap", "0 kB"),
             "minflt": info["stat"].get("minflt", 0),
             "majflt": info["stat"].get("majflt", 0),
+            "cminflt": info["stat"].get("cminflt", 0),
+            "cmajflt": info["stat"].get("cmajflt", 0),
             "segmentos": resumir_segmentos(pid),
         })
 

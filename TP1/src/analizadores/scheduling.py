@@ -28,7 +28,7 @@ def analizar(snapshot):
             "priority": stat.get("priority", "?"),
             "nice": stat.get("nice", "?"),
             "policy": policy_name(stat.get("policy", -1)),
-            "rt_priority": status.get("Rt_priority", "?"),
+            "rt_priority": stat.get("rt_priority", 0),
             "pgid": stat.get("pgrp", "?"),
             "sid": stat.get("session", "?"),
             "cpus": status.get("Cpus_allowed_list", "-"),

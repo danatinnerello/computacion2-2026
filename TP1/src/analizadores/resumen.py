@@ -19,6 +19,11 @@ def analizar(snapshot, anterior):
             )
 
         threads = leer_threads(pid)
+        try:
+            rss_kb = int(status.get("VmRSS", "0 kB").split()[0])
+        except (ValueError, IndexError):
+            rss_kb = 0
+
         procesos.append({
             "pid": pid,
             "ppid": status.get("PPid", "?"),
@@ -30,6 +35,7 @@ def analizar(snapshot, anterior):
             "comando": info["cmdline"] or stat["comm"],
             "cpu_jiffies": cpu_jiffies,
             "cpu_pct": snapshot.get("cpu_pct", {}).get(pid, 0.0),
+            "rss_kb": rss_kb,
         })
 
     procesos.sort(key=lambda p: p["cpu_pct"], reverse=True)

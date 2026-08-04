@@ -41,13 +41,10 @@ TP1/
 └── tests/
     ├── test_config.py
     ├── test_display.py
-    ├── test_display_extra.py
     ├── test_analizadores.py
     ├── test_procfs.py
     ├── test_recolector.py
-    ├── test_senales.py
-    ├── test_senales_extra.py
-    └── test_shared.py
+    └── test_senales.py
 ```
 
 ## Archivos principales
@@ -83,7 +80,7 @@ El monitor soporta las siguientes vistas:
 - `6` o `p`: vista `scheduling`
 - `7` o `g`: vista `sistema`
 - `↑` / `↓`: navegar procesos
-- `Enter`: fijar PID seleccionado
+- `Enter`: fijar o desfijar PID seleccionado
 - `/`: filtrar por comando
 - `u`: filtrar por usuario
 - `c`: cambiar orden entre `pid`, `cpu`, `rss`
@@ -200,10 +197,7 @@ El archivo `config.json` define el intervalo de actualización para cada vista:
 
 ```bash
 cd TP1
-python3 -m pip install -r requirements.txt
 ```
-
-Si no se usa `requirements.txt`, solo se necesita Python estándar.
 
 ## Ejecución local
 
@@ -265,3 +259,12 @@ python3 -m unittest tests.test_display
 - Usa un terminal real para la interfaz `curses`, no un entorno no interactivo.
 - Si agregas nuevas vistas, incluye tests en `tests/test_analizadores.py` y la lógica de render en `src/display.py`.
 
+## Capturas del buen funcionamiento 
+![Vista resumen](image.png)
+![Vista memoria](image-1.png)
+![Vista fds](image-2.png)
+![Vista threads](image-3.png)
+![Vista señales](image-4.png)
+![Vista scheduling](image-5.png)
+![Vista sistema](image-6.png)
+![Vista threads](image-7.png)
