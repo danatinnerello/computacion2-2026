@@ -154,6 +154,24 @@ Comunicación: los procesos comparten estado a través de `multiprocessing.Manag
   - Los intervalos en `config.json` son moderados (2-10s) para balancear frescura de la información y coste de I/O de `/proc`. `sistema` es rápido, por eso usa 2s; `fds` y `senales` son más costosos y usan 5-10s.
   - El usuario puede ajustar el intervalo de la vista activa con `+` / `-`, y los cambios se aplican al `Value` compartido de esa vista.
 
+- Por qué `curses` y no `rich`
+  - `curses` es parte de la stdlib de Python en Linux: no agrega una dependencia externa que pueda faltar o romperse dentro del contenedor, y encaja bien con el resto del TP.
+  - Necesitaba lectura de teclado no bloqueante (`stdscr.nodelay(True)` + `stdscr.timeout(150)`) para que el mismo loop pudiera: redibujar la pantalla, revisar las flags de señales (`senales.shutdown`, `dump_requested`, etc.) y leer teclas, todo sin usar `asyncio`, ni threads extra para el input. `curses` resuelve eso con una sola llamada por vuelta de loop.
+
+- Layout de la pantalla
+  - Header fijo (vista activa, intervalo actual, mensaje de estado o filtros aplicados) + lista de procesos en el medio + panel de detalle abajo que cambia de contenido según la vista (FDs, threads, señales, segmentos de memoria o scheduling). La lista de procesos siempre está visible arriba, tal como pide la consigna, y el panel de abajo es lo único que varía.
+  - El espacio de la lista se calcula dinámicamente contra el alto de la terminal (`max_lista`), reservando siempre líneas fijas para el panel de detalle y el footer de teclas, para que no se pisen aunque la terminal sea chica.
+
+- Refresh diferenciado y no bloqueante
+  - Cada vista tiene su propio intervalo (`intervalos.get(vista)`) y la pantalla solo se redibuja cuando pasó ese intervalo o hay un cambio explícito (`needs_refresh`, por ejemplo al cambiar de vista o tecla presionada). Esto evita parpadeo y consumo de CPU innecesario si el usuario no está interactuando.
+  - El pin de proceso (`Enter`) se resuelve buscando el PID pineado en la lista ya ordenada/filtrada en cada redraw, así el proceso "pineado" se sigue mostrando seleccionado aunque cambie de posición al reordenar por CPU/RSS/PID.
+
+- Modo verbose (`SIGUSR2`)
+  - No agrega datos nuevos: los FDs, threads y segmentos de memoria completos siempre se leen y están disponibles, verbose solo cambia cuántas líneas se muestran en el panel de detalle (6 vs. 15), para no saturar la pantalla por default.
+
+- Fallback sin `curses`
+  - Si `curses` no está disponible o `stdout` no es un TTY (por ejemplo corriendo los tests, o en un pipe), el display cae a un loop de texto plano (`run_fallback_loop`) que igual respeta señales, filtros e intervalos. Esto también fue clave para poder testear `display.py` sin necesitar una terminal real.
+
 ## Conceptos del curso aplicados (mapeo a contenidos de clases)
 
 - Detección de zombies (clase 3/4: procesos, fork/exec/wait)
@@ -252,6 +270,16 @@ python3 -m unittest tests.test_display
 - El cálculo de CPU% por thread usa el delta de jiffies relativo al delta global, lo cual puede ser menos preciso en procesos muy cortos o con picos rápidos.
 - La interfaz `curses` puede no renderizar bien en terminals muy pequeños; la experiencia funciona mejor con al menos 80 columnas.
 - Si un analizador muere, el monitor principal no reinicia automáticamente ese proceso; el shutdown sigue funcionando.
+
+## Lo que aprendí
+
+Después de pasar semanas leyendo `/proc` a mano, ahora los distingo por instinto: un PID es una carpeta en `/proc`, un TID es una carpeta dentro de `task/`, y cada uno tiene su propio `stat` con su propio estado, su propio tiempo de CPU y sus propios context switches. Verlo escrito en un archivo de texto plano, en vez de leerlo en un diagrama, lo hizo mucho más real.
+
+Lo que más me costó no fue leer `/proc` — eso, una vez que entendés el formato, es mecánico — sino diseñar la comunicación entre procesos sin terminar con una race condition. Al principio tenía la tentación de que cada analizador escribiera directo en el `Manager.dict()` del snapshot, y me di cuenta a tiempo (gracias a pensarlo en términos de "¿quién puede escribir esta clave al mismo tiempo que quién?") de que eso metía justo el problema que el TP quería que evitara. Terminar con un solo escritor (el agregador) fue la decisión que más me acomodó la cabeza: de golpe dejé de necesitar locks explícitos porque estructuralmente era imposible que dos procesos pisaran el mismo dato.
+
+Las señales fueron la otra sorpresa. Sabía que `SIGINT` mataba procesos, pero no tenía ni idea de que escribir código "async-signal-safe" era un problema real — que no podés simplemente hacer lo que quieras dentro de un handler porque puede interrumpir cualquier cosa en cualquier momento. El patrón self-pipe con `signal.set_wakeup_fd` me resultó rarísimo la primera vez que lo vi (¿escribir a un pipe desde un handler para que el loop principal lo "note" después?), pero una vez que lo armé y vi cómo `SIGUSR1` disparaba un dump sin bloquear ni romper nada, entendí por qué se usa tanto en sistemas reales.
+
+Si tuviera que resumir en una frase: este TP me sacó la idea de que Linux es una caja negra. `/proc` es, literalmente, el sistema operativo contándote qué está haciendo, en texto plano, todo el tiempo.
 
 ## Buenas prácticas
 
