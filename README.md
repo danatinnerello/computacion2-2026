@@ -18,7 +18,10 @@
 - `clase_6_mmap/` - Ejercicios resueltos
 - `clase_7_multiprocessings/` - Ejercicios resueltos
 - `clase_8_avanzado/` - Ejercicios resueltos
-- `clase_7_threading/` - Ejercicios resueltos
+- `clase_9_10_threading/` - Ejercicios resueltos
+- `clase_11_sincronizacion/` - Ejercicios resueltos
+- `clase_12_redes/` - Ejercicios resueltos
+- `clase_13_socket/` - Ejercicios resueltos
 - `tp1/` - Trabajo Práctico 1
 - `tp2/` - Trabajo Práctico 2
 
@@ -37,7 +40,9 @@
 | Clase 8    | Listo  |
 | Clase 9    | Listo  |
 | Clase 10   | Listo  |
-| Clase 11   | Pendiente |
-| TP1        | Pendiente |
+| Clase 11   | Listo  |
+| Clase 12   | Listo  |
+| Clase 13   | Listo  |
+| TP1        | Listo  |
 | TP2        | Pendiente |
 
