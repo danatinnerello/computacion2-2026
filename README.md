@@ -22,6 +22,7 @@
 - `clase_11_sincronizacion/` - Ejercicios resueltos
 - `clase_12_redes/` - Ejercicios resueltos
 - `clase_13_socket/` - Ejercicios resueltos
+- `clase_14_servidores_concurrentes/` - Ejercicios resueltos
 - `tp1/` - Trabajo Práctico 1
 - `tp2/` - Trabajo Práctico 2
 
@@ -41,8 +42,9 @@
 | Clase 9    | Listo  |
 | Clase 10   | Listo  |
 | Clase 11   | Listo  |
+| TP1        | Listo  |
 | Clase 12   | Listo  |
 | Clase 13   | Listo  |
-| TP1        | Listo  |
+| Clase 14   | Listo  |
 | TP2        | Pendiente |
 
