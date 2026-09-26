@@ -23,6 +23,9 @@
 - `clase_12_redes/` - Ejercicios resueltos
 - `clase_13_socket/` - Ejercicios resueltos
 - `clase_14_servidores_concurrentes/` - Ejercicios resueltos
+- `clase_15_udp/` - Ejercicios resueltos 
+- `clase_16_socketserver/` - Ejercicios resueltos
+- `clase_17_multiplexacion/` - Ejercicios resueltos
 - `tp1/` - Trabajo Práctico 1
 - `tp2/` - Trabajo Práctico 2
 
@@ -46,5 +49,8 @@
 | Clase 12   | Listo  |
 | Clase 13   | Listo  |
 | Clase 14   | Listo  |
+| Clase 15   | Listo  |
+| Clase 16   | Listo  |
+| Clase 17   | Listo  |
 | TP2        | Pendiente |
 
