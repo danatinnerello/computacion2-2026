@@ -27,6 +27,7 @@
 - `clase_16_socketserver/` - Ejercicios resueltos
 - `clase_17_multiplexacion/` - Ejercicios resueltos
 - `clase_18_yield_a_asyncio/` - Ejercicios resueltos
+- `clase_19_http/` - Ejercicios resueltos
 - `tp1/` - Trabajo Práctico 1
 - `tp2/` - Trabajo Práctico 2
 
@@ -54,7 +55,7 @@
 | Clase 16   | Listo  |
 | Clase 17   | Listo  |
 | Clase 18   | Listo  |
-| Clase 19   | Pendiente |
+| Clase 19   | Listo  |
 | Clase 20   | Pendiente |
 | Clase 21   | Pendiente |
 | Clase 22   | Pendiente |
